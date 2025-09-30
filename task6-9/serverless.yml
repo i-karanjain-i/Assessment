@@ -1,0 +1,86 @@
+service: graphql-dynamodb-example
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: us-east-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+      Resource: 
+        - arn:aws:dynamodb:us-east-1:*:table/ItemsTable
+  environment:
+    GRAPHQL_API_URL: ""  # will be filled after deployment
+    GRAPHQL_API_KEY: ""  # will be filled after deployment
+
+resources:
+  Resources:
+    ItemsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ItemsTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+plugins:
+  - serverless-appsync-plugin
+
+custom:
+  appSync:
+    name: GraphqlApi
+    authenticationType: API_KEY
+    schema: schema.graphql
+    apiKeys:
+      - name: Default
+    mappingTemplates:
+      - dataSource: LambdaSource
+        type: Query
+        field: getItem
+        request: "request.vtl"
+        response: "response.vtl"
+      - dataSource: LambdaSource
+        type: Mutation
+        field: createItem
+        request: "request.vtl"
+        response: "response.vtl"
+    dataSources:
+      - type: AWS_LAMBDA
+        name: LambdaSource
+        description: "Lambda as GraphQL resolver"
+        config:
+          functionName: graphql
+
+functions:
+  graphqlHandler:
+    handler: graphql-lambda.graphql
+
+  callerLambda:
+    handler: caller-lambda.handler
+    environment:
+      GRAPHQL_API_URL: ${self:provider.environment.GRAPHQL_API_URL}
+      GRAPHQL_API_KEY: ${self:provider.environment.GRAPHQL_API_KEY}
+
+  crudLambda:
+    handler: dynamodb-crud.handler
+    events:
+      - http:
+          path: items
+          method: post   # Create
+      - http:
+          path: items/{id}
+          method: get    # Read
+      - http:
+          path: items/{id}
+          method: put    # Update
+      - http:
+          path: items/{id}
+          method: delete # Delete

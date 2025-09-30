@@ -1,0 +1,4 @@
+Hello (Stream) World!
+Another line via stream
+Appended line (Async)
+Appended via Stream
